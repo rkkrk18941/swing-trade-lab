@@ -146,20 +146,19 @@ function App(){
   useEffect(()=>{
     async function load(){
       try{
-        const res=await fetch("/api/stocks?tickers=7203,6758,9984,8306,6861,4063,6501,7974,8035,6723&period=1y");
-        if(res.ok){
-          const j=await res.json();
-          if(j.stocks&&j.stocks.length>0&&j.stocks[0].data&&j.stocks[0].data.length>50){
-            setStocks(j.stocks);setSrc("real");setLoading(false);
-            try{
-              const r2=await fetch("/api/stocks?tickers=4519,6594,6367,4568,7741,6981,9433,9432,6902,3382&period=1y");
-              const j2=await r2.json();
-              if(j2.stocks)setStocks(prev=>[...prev,...j2.stocks.filter(s=>s.data&&s.data.length>50)]);
-            }catch(e2){}
-            return;
-          }
+        var res=await fetch("/api/stocks?batch=0");
+        if(!res.ok)throw new Error("API error");
+        var j=await res.json();
+        if(!j.stocks||j.stocks.length===0)throw new Error("no data");
+        var totalBatches=j.batches||10;
+        setStocks(j.stocks);setSrc("real");setLoading(false);
+        for(var bi=1;bi<totalBatches;bi++){
+          try{
+            var r2=await fetch("/api/stocks?batch="+bi);
+            var j2=await r2.json();
+            if(j2.stocks&&j2.stocks.length>0)setStocks(function(prev){return prev.concat(j2.stocks)});
+          }catch(e2){}
         }
-        throw new Error("no data");
       }catch(err){
         setStocks(genDemo());setSrc("demo");setLoading(false);
       }
@@ -179,6 +178,7 @@ function App(){
 
   const allResults=useMemo(function(){
     if(!stocks.length)return[];
+        if(!stocks.length)return[];
     var res=[];
     for(var ci=0;ci<COMBOS.length;ci++){
       var combo=COMBOS[ci];
@@ -360,3 +360,5 @@ ReactDOM.createRoot(document.getElementById("app")).render(<App/>);
 </script>
 </body>
 </html>
+
+                           
