@@ -1,7 +1,6 @@
 from http.server import BaseHTTPRequestHandler
 import json
 
-# 小型〜中型株（時価総額100億〜5000億目安）+ 一部中大型
 ALL = [
     "2127","2130","2148","2157","2175","2181","2191","2413","2432","2438",
     "2471","2492","2497","2501","2587","2593","2607","2651","2670","2676",
@@ -64,11 +63,8 @@ class handler(BaseHTTPRequestHandler):
             stocks = []
             for tk in tickers:
                 try:
-                    t = yf.Ticker(tk+".T")
-                    df = t.history(period="6mo",auto_adjust=True)
+                    df = yf.download(tk+".T",period="6mo",auto_adjust=True,progress=False)
                     if df.empty: continue
-                    info = t.info
-                    name = info.get("shortName",info.get("longName",tk))
                     rows = []
                     for idx,row in df.iterrows():
                         try:
@@ -77,7 +73,7 @@ class handler(BaseHTTPRequestHandler):
                             rows.append({"date":idx.strftime("%Y-%m-%d"),"open":round(float(row["Open"])),"high":round(float(row["High"])),"low":round(float(row["Low"])),"close":round(c),"volume":int(float(row.get("Volume",0)))})
                         except: pass
                     if len(rows)>20:
-                        stocks.append({"ticker":tk,"name":name,"data":rows})
+                        stocks.append({"ticker":tk,"name":tk,"data":rows})
                 except: pass
             self._ok({"stocks":stocks,"batch":bi,"total":len(ALL),"batches":(len(ALL)+sz-1)//sz})
         except Exception as ex:
@@ -91,7 +87,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type","application/json")
         self.send_header("Access-Control-Allow-Origin","*")
-        self.send_header("Cache-Control","s-maxage=3600, stale-while-revalidate=86400")
+        self.send_header("Cache-Control","s-maxage=7200, stale-while-revalidate=86400")
         self.end_headers()
         self.wfile.write(json.dumps(data,ensure_ascii=False).encode())
 
