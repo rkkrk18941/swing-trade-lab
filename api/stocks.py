@@ -1,98 +1,23 @@
 from http.server import BaseHTTPRequestHandler
 import json
 
-ALL = [
-    "2127","2130","2148","2157","2175","2181","2191","2413","2432","2438",
-    "2471","2492","2497","2501","2587","2593","2607","2651","2670","2676",
-    "2695","2702","2726","2749","2784","2801","2809","2815","2818","2897",
-    "2929","2930","2931","2980","3038","3064","3076","3082","3088","3092",
-    "3097","3141","3182","3197","3222","3244","3269","3288","3291","3349",
-    "3360","3371","3382","3385","3405","3407","3436","3479","3543","3626",
-    "3632","3635","3659","3665","3668","3669","3676","3678","3681","3688",
-    "3697","3724","3738","3741","3765","3769","3774","3788","3923","3932",
-    "3938","3941","3962","3966","3969","3978","3993","4004","4021","4042",
-    "4043","4044","4047","4063","4071","4080","4151","4168","4176","4180",
-    "4183","4185","4186","4188","4194","4204","4205","4215","4307","4324",
-    "4343","4369","4370","4371","4385","4420","4423","4425","4428","4434",
-    "4443","4449","4452","4478","4480","4484","4485","4488","4502","4503",
-    "4507","4516","4519","4523","4528","4530","4543","4553","4568","4578",
-    "4587","4612","4631","4661","4666","4676","4680","4684","4686","4689",
-    "4704","4716","4722","4739","4751","4755","4812","4816","4848","4849",
-    "4901","4911","4919","4922","4927","4963","4966","4967","4971","4974",
-    "5019","5020","5101","5108","5201","5214","5301","5332","5333","5334",
-    "5381","5401","5406","5411","5423","5444","5463","5471","5480","5486",
-    "5541","5602","5706","5711","5713","5714","5801","5802","5803","5851",
-    "5929","5938","5947","6028","6058","6062","6098","6103","6113","6134",
-    "6141","6146","6178","6191","6196","6200","6258","6268","6273","6287",
-    "6301","6305","6315","6324","6326","6330","6361","6367","6370","6383",
-    "6407","6432","6436","6440","6457","6464","6471","6479","6501","6503",
-    "6504","6506","6526","6532","6544","6556","6570","6586","6594","6613",
-    "6632","6641","6645","6670","6674","6701","6702","6723","6724","6727",
-    "6728","6750","6752","6753","6758","6762","6806","6841","6845","6849",
-    "6857","6861","6869","6902","6920","6923","6925","6952","6954","6963",
-    "6965","6967","6971","6976","6981","6988","6995","6999","7003","7011",
-    "7012","7013","7014","7148","7164","7172","7181","7182","7186","7201",
-    "7202","7203","7205","7211","7261","7267","7269","7270","7272","7282",
-    "7309","7453","7458","7518","7532","7545","7550","7564","7575","7599",
-    "7606","7616","7731","7733","7735","7741","7747","7751","7752","7762",
-    "7832","7911","7912","7936","7951","7974","8001","8002","8015","8031",
-    "8035","8053","8056","8058","8111","8113","8233","8252","8267","8303",
-    "8306","8308","8309","8316","8354","8377","8411","8418","8439","8473",
-    "8515","8570","8591","8595","8601","8604","8609","8630","8697","8725",
-    "8750","8766","8795","8801","8802","8804","8830","8876","9001","9003",
-    "9005","9007","9008","9009","9020","9021","9022","9024","9042","9045",
-    "9064","9065","9086","9101","9104","9107","9110","9143","9201","9202",
-    "9248","9301","9364","9432","9433","9434","9501","9502","9503","9504",
-    "9505","9507","9508","9513","9531","9532","9602","9613","9684","9697",
-    "9735","9741","9744","9749","9755","9766","9783","9831","9832","9843",
-    "9861","9962","9983","9984",
-]
-
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             import yfinance as yf
-            from urllib.parse import urlparse, parse_qs
-            params = parse_qs(urlparse(self.path).query)
-            bi = int(params.get("batch",["0"])[0])
-            sz = 5
-            tickers = ALL[bi*sz:(bi+1)*sz]
-            if not tickers:
-                self._ok({"stocks":[],"batch":bi,"total":len(ALL),"batches":(len(ALL)+sz-1)//sz})
-                return
-            stocks = []
-            for tk in tickers:
-                try:
-                    df = yf.download(tk+".T",period="6mo",auto_adjust=True,progress=False)
-                    if df.empty: continue
-                    rows = []
-                    for idx,row in df.iterrows():
-                        try:
-                            c = float(row["Close"])
-                            if c!=c: continue
-                            rows.append({"date":idx.strftime("%Y-%m-%d"),"open":round(float(row["Open"])),"high":round(float(row["High"])),"low":round(float(row["Low"])),"close":round(c),"volume":int(float(row.get("Volume",0)))})
-                        except: pass
-                    if len(rows)>20:
-                        stocks.append({"ticker":tk,"name":tk,"data":rows})
-                except: pass
-            self._ok({"stocks":stocks,"batch":bi,"total":len(ALL),"batches":(len(ALL)+sz-1)//sz})
-        except Exception as ex:
-            self.send_response(500)
+            df = yf.download("7203.T", period="1mo", auto_adjust=True, progress=False)
+            result = {"rows": len(df), "columns": list(df.columns) if not df.empty else [], "empty": df.empty}
+            if not df.empty:
+                last = df.iloc[-1]
+                result["last"] = {"close": round(float(last["Close"])), "date": str(df.index[-1].date())}
+            self.send_response(200)
             self.send_header("Content-Type","application/json")
             self.send_header("Access-Control-Allow-Origin","*")
             self.end_headers()
-            self.wfile.write(json.dumps({"error":str(ex)}).encode())
-
-    def _ok(self,data):
-        self.send_response(200)
-        self.send_header("Content-Type","application/json")
-        self.send_header("Access-Control-Allow-Origin","*")
-        self.send_header("Cache-Control","s-maxage=7200, stale-while-revalidate=86400")
-        self.end_headers()
-        self.wfile.write(json.dumps(data,ensure_ascii=False).encode())
-
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin","*")
-        self.send_header("Access-Control-Allow-Methods","GET, OPTIONS")
-        self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+        except Exception as ex:
+            self.send_response(200)
+            self.send_header("Content-Type","application/json")
+            self.send_header("Access-Control-Allow-Origin","*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error":str(ex),"type":type(ex).__name__}).encode())
