@@ -1,148 +1,363 @@
-"""
-Vercel Serverless: 日本株データ取得API（150銘柄対応・高速版）
-"""
-from http.server import BaseHTTPRequestHandler
-import json
-import yfinance as yf
-from datetime import datetime
-import traceback
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#060a10"/>
+<title>Swing Trade Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#060a10;color:#e4eaf2;font-family:'Noto Sans JP','JetBrains Mono',sans-serif;-webkit-font-smoothing:antialiased}
+.m{font-family:'JetBrains Mono',monospace}
+.c{background:#0c1018;border:1px solid #182030;border-radius:10px;padding:14px;margin-bottom:8px}
+.ch{border-color:#00e5ff33;background:#00e5ff06}
+.b{background:transparent;border:1px solid #182030;color:#8094a8;border-radius:6px;padding:6px 13px;font-size:11px;cursor:pointer;font-family:'JetBrains Mono';transition:all .15s}
+.b.a{background:#00e5ff18;border-color:#00e5ff;color:#00e5ff}
+.s{background:#1a2535;color:#e4eaf2;border:1px solid #182030;border-radius:6px;padding:6px 10px;font-size:12px;outline:none;font-family:'JetBrains Mono'}
+.lb{font-size:9px;color:#4a5e70;letter-spacing:1px;margin-bottom:2px;font-family:'JetBrains Mono';text-transform:uppercase}
+.g{color:#00e676}.r{color:#ff1744}.y{color:#ffd740}.ac{color:#00e5ff}.d{color:#8094a8}.mu{color:#4a5e70}
+.f{display:flex}.w{flex-wrap:wrap}.g8{gap:8px}.g4{gap:4px}.g6{gap:6px}.ic{align-items:center}
+.bar{height:6px;border-radius:3px;margin-top:4px;transition:width .3s}
+@keyframes ld{0%,100%{opacity:.4}50%{opacity:1}}
+.ld{animation:ld 1.5s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useMemo,useEffect}=React;
+const e=React.createElement;
 
-TICKER_NAMES = {
-    "7203":"トヨタ","6758":"ソニーG","9984":"ソフトバンクG","8306":"三菱UFJ","6861":"キーエンス",
-    "4063":"信越化学","6501":"日立","7974":"任天堂","8035":"東京エレクトロン","6723":"ルネサス",
-    "4519":"中外製薬","6594":"ニデック","6367":"ダイキン","4568":"第一三共","7741":"HOYA",
-    "6981":"村田製作所","9433":"KDDI","9432":"NTT","6902":"デンソー","3382":"セブン&i",
-    "8058":"三菱商事","6098":"リクルート","4661":"OLC","2802":"味の素","6762":"TDK",
-    "7267":"ホンダ","9983":"ファストリ","6857":"アドバンテスト","4543":"テルモ","7751":"キヤノン",
-    "8031":"三井物産","8001":"伊藤忠","8766":"東京海上","8411":"みずほFG","8316":"三井住友FG",
-    "9434":"ソフトバンク","6326":"クボタ","4503":"アステラス","4502":"武田薬品","6971":"京セラ",
-    "7832":"バンナムHD","3659":"ネクソン","4578":"大塚HD","6301":"コマツ","7269":"スズキ",
-    "5108":"ブリヂストン","6504":"富士電機","6702":"富士通","6752":"パナソニック","7011":"三菱重工",
-    "8015":"豊田通商","9020":"JR東日本","9021":"JR西日本","9022":"JR東海","2914":"JT",
-    "3086":"Jフロント","3099":"三越伊勢丹","4452":"花王","4901":"富士フイルム","5401":"日本製鉄",
-    "5713":"住友金属鉱","5802":"住友電工","6103":"オークマ","6273":"SMC","6305":"日立建機",
-    "6479":"ミネベアミツミ","6506":"安川電機","6586":"マキタ","6645":"オムロン","6701":"NEC",
-    "6724":"セイコーエプソン","6753":"シャープ","6758":"ソニーG","6841":"横河電機","6869":"シスメックス",
-    "6920":"レーザーテック","6952":"カシオ","6954":"ファナック","6976":"太陽誘電","7012":"川崎重工",
-    "7013":"IHI","7201":"日産","7211":"三菱自","7261":"マツダ","7270":"SUBARU",
-    "7272":"ヤマハ発","7309":"シマノ","7731":"ニコン","7733":"オリンパス","7735":"SCREENホールディングス",
-    "7752":"リコー","7762":"シチズン","7911":"凸版","7912":"大日本印刷","7951":"ヤマハ",
-    "8002":"丸紅","8053":"住友商事","8113":"ユニ・チャーム","8233":"高島屋","8252":"丸井G",
-    "8267":"イオン","8303":"新生銀","8308":"りそなHD","8309":"三井住友トラスト","8354":"ふくおかFG",
-    "8591":"オリックス","8601":"大和証券G","8604":"野村HD","8630":"SOMPO","8725":"MS&AD",
-    "8750":"第一生命","8795":"T&DHD","9001":"東武鉄道","9005":"東急","9007":"小田急",
-    "9008":"京王","9009":"京成","9064":"ヤマトHD","9101":"日本郵船","9104":"商船三井",
-    "9107":"川崎汽船","9143":"SGHD","9201":"JAL","9202":"ANA","9301":"三菱倉庫",
-    "9501":"東京電力","9502":"中部電力","9503":"関西電力","9531":"東京ガス","9532":"大阪ガス",
-    "9602":"東宝","9613":"NTTデータ","9735":"セコム","9766":"コナミG","9843":"ニトリHD",
-    "2413":"エムスリー","2502":"アサヒGHD","2503":"キリンHD","2801":"キッコーマン",
-    "3038":"神戸物産","3092":"ZOZO","3288":"オープンハウス","3349":"コスモス薬品",
-    "3405":"クラレ","3407":"旭化成","3436":"SUMCO","4004":"昭和電工","4005":"住友化学",
-    "4021":"日産化学","4042":"東ソー","4043":"トクヤマ","4151":"協和キリン","4183":"三井化学",
-    "4188":"三菱ケミカル","4307":"NRI","4385":"メルカリ","4507":"塩野義","4523":"エーザイ",
-    "4612":"日本ペイント","4631":"DIC","4684":"オービック","4689":"Zホールディングス",
-    "4911":"資生堂","4922":"コーセー","5019":"出光興産","5020":"ENEOS","5101":"横浜ゴム",
+// Indicators
+function sma(d,p){return d.map((_,i)=>i<p-1?null:d.slice(i-p+1,i+1).reduce((s,x)=>s+x.close,0)/p)}
+function ema(d,p){const k=2/(p+1),r=[];let v=null;for(let i=0;i<d.length;i++){if(i<p-1){r.push(null);continue}v=v===null?d.slice(0,p).reduce((s,x)=>s+x.close,0)/p:d[i].close*k+v*(1-k);r.push(v)}return r}
+function calcRsi(d,p=14){const r=Array(d.length).fill(null);if(d.length<=p)return r;let ag=0,al=0;for(let i=1;i<=p;i++){const df=d[i].close-d[i-1].close;if(df>0)ag+=df;else al-=df}ag/=p;al/=p;r[p]=al===0?100:100-100/(1+ag/al);for(let i=p+1;i<d.length;i++){const df=d[i].close-d[i-1].close;ag=(ag*(p-1)+(df>0?df:0))/p;al=(al*(p-1)+(df<0?-df:0))/p;r[i]=al===0?100:100-100/(1+ag/al)}return r}
+function bbands(d,p=20,m=2){const mid=sma(d,p);return d.map((_,i)=>{if(mid[i]===null)return{u:null,m:null,l:null};const std=Math.sqrt(d.slice(i-p+1,i+1).reduce((s,x)=>s+(x.close-mid[i])**2,0)/p);return{u:mid[i]+m*std,m:mid[i],l:mid[i]-m*std}})}
+function volRatio(d,p=20){return d.map((_,i)=>i<p?null:d[i].volume/(d.slice(i-p,i).reduce((s,x)=>s+x.volume,0)/p))}
+function atr(d,p=14){const tr=d.map((x,i)=>i===0?x.high-x.low:Math.max(x.high-x.low,Math.abs(x.high-d[i-1].close),Math.abs(x.low-d[i-1].close)));return tr.map((_,i)=>i<p-1?null:tr.slice(i-p+1,i+1).reduce((s,x)=>s+x,0)/p)}
+function buildCache(d){return{sma5:sma(d,5),sma25:sma(d,25),sma75:sma(d,75),ema9:ema(d,9),ema21:ema(d,21),rsi14:calcRsi(d,14),bb20:bbands(d,20,2),volR:volRatio(d,20),atr14:atr(d,14)}}
+
+const CONDS={
+  rsi_recovering:{name:"RSI反発",fn:(d,i,c)=>c.rsi14[i]!=null&&c.rsi14[i-1]!=null&&c.rsi14[i-1]<=30&&c.rsi14[i]>30},
+  ma_golden:{name:"GC(5/25)",fn:(d,i,c)=>c.sma5[i]!=null&&c.sma25[i]!=null&&c.sma5[i-1]!=null&&c.sma25[i-1]!=null&&c.sma5[i-1]<=c.sma25[i-1]&&c.sma5[i]>c.sma25[i]},
+  ma5_above_25:{name:"MA5>MA25",fn:(d,i,c)=>c.sma5[i]!=null&&c.sma25[i]!=null&&c.sma5[i]>c.sma25[i]},
+  price_above_75:{name:"価格>MA75",fn:(d,i,c)=>c.sma75[i]!=null&&d[i].close>c.sma75[i]},
+  bb_lower_bounce:{name:"BB下限反発",fn:(d,i,c)=>c.bb20[i]&&c.bb20[i].l!=null&&c.bb20[i-1]&&c.bb20[i-1].l!=null&&d[i-1].close<=c.bb20[i-1].l&&d[i].close>c.bb20[i].l},
+  vol_spike:{name:"出来高2倍",fn:(d,i,c)=>c.volR[i]!=null&&c.volR[i]>=2.0},
+  vol_spike15:{name:"出来高1.5倍",fn:(d,i,c)=>c.volR[i]!=null&&c.volR[i]>=1.5},
+  bullish:{name:"陽線",fn:(d,i)=>d[i].close>d[i].open},
+  up_1pct:{name:"+1%超",fn:(d,i)=>i>0&&(d[i].close-d[i-1].close)/d[i-1].close>0.01},
+  ema9_above_21:{name:"EMA9>21",fn:(d,i,c)=>c.ema9[i]!=null&&c.ema21[i]!=null&&c.ema9[i]>c.ema21[i]},
+  low_vol:{name:"ATR低下",fn:(d,i,c)=>c.atr14[i]!=null&&i>=5&&c.atr14[i-5]!=null&&c.atr14[i]<c.atr14[i-5]*0.8},
+};
+
+const COMBOS=[
+  {id:"C1",name:"RSI反発+BB+陽線",conds:["rsi_recovering","bb_lower_bounce","bullish"],hold:5},
+  {id:"C2",name:"GC+75日線上+出来高",conds:["ma_golden","price_above_75","vol_spike15"],hold:10},
+  {id:"C3",name:"RSI反発+トレンド上",conds:["rsi_recovering","ma5_above_25"],hold:7},
+  {id:"C4",name:"BB反発+出来高急増",conds:["bb_lower_bounce","vol_spike"],hold:5},
+  {id:"C5",name:"EMAモメンタム+出来高",conds:["ema9_above_21","price_above_75","vol_spike15","bullish"],hold:8},
+  {id:"C6",name:"GC+陽線+1%超",conds:["ma_golden","bullish","up_1pct"],hold:7},
+  {id:"C7",name:"トリプルトレンド",conds:["ma5_above_25","ema9_above_21","price_above_75"],hold:10},
+  {id:"C8",name:"ATR低下→ブレイク",conds:["low_vol","vol_spike","bullish","up_1pct"],hold:7},
+  {id:"C9",name:"RSI反発+75日線+出来高",conds:["rsi_recovering","price_above_75","vol_spike15"],hold:7},
+  {id:"C10",name:"BB反発+トレンド上",conds:["bb_lower_bounce","ma5_above_25","bullish"],hold:7},
+];
+
+function testCombo(stock,combo,cfg){
+  const{capital=1000000,slip=5,stopLoss=0.05}=cfg;
+  const data=stock.data,cache=buildCache(data),condFns=combo.conds.map(c=>CONDS[c]);
+  const trades=[];let holdUntil=-1;
+  for(let i=Math.max(76,1);i<data.length;i++){
+    if(i<holdUntil)continue;
+    const ok=condFns.every(c=>{try{return c.fn(data,i,cache)}catch(e){return false}});
+    if(!ok)continue;
+    const bp=data[i].close*(1+slip/10000);
+    const sh=Math.floor((capital*0.95)/(bp*100))*100;
+    if(sh<100)continue;
+    const cost=bp*sh*1.001;
+    let xi=Math.min(i+combo.hold,data.length-1),xr="期間決済",xp=data[xi].close;
+    if(stopLoss){for(let j=i+1;j<=xi;j++){if((data[j].low-bp)/bp<=-stopLoss){xi=j;xp=bp*(1-stopLoss);xr="損切";break}}}
+    if(xr==="期間決済")xp=data[xi].close;
+    const sp=xp*(1-slip/10000),proc=sp*sh*0.999,pnl=proc-cost,retPct=(sp-bp)/bp;
+    let lr=null;
+    if(pnl<0){
+      const vr=cache.volR[i];let gap=false;
+      for(let j=i+1;j<=xi;j++){if(j>0&&(data[j].open-data[j-1].close)/data[j-1].close<-0.02){gap=true;break}}
+      const quick=i+2<data.length&&(data[i+2].close-bp)/bp<-0.03;
+      if(vr!=null&&vr>3&&!gap)lr="仕手疑い";else if(gap)lr="ファンダ";else if(quick)lr="ダマシ";else lr="トレンド逆行";
+    }
+    trades.push({nd:data[i].date,ep:Math.round(bp),ed:data[xi].date,xp:Math.round(sp),sh,pnl:Math.round(pnl),retPct,xr,lr,hd:xi-i});
+    holdUntil=xi+1;
+  }
+  const w=trades.filter(t=>t.pnl>0),l=trades.filter(t=>t.pnl<=0);
+  const gp=w.reduce((s,t)=>s+t.pnl,0),gl=Math.abs(l.reduce((s,t)=>s+t.pnl,0));
+  const lossR={};l.forEach(t=>{lossR[t.lr]=(lossR[t.lr]||0)+1});
+  return{trades,s:{n:trades.length,w:w.length,l:l.length,wr:trades.length?w.length/trades.length:0,pnl:gp-gl,gp,gl,pf:gl>0?gp/gl:gp>0?99:0,avgRet:trades.length?trades.reduce((s,t)=>s+t.retPct,0)/trades.length:0,avgWR:w.length?w.reduce((s,t)=>s+t.retPct,0)/w.length:0,avgLR:l.length?l.reduce((s,t)=>s+t.retPct,0)/l.length:0,lossR}};
 }
 
-ALL_TICKERS = list(TICKER_NAMES.keys())
+function checkToday(stock,combo){
+  const data=stock.data;if(data.length<80)return{met:false};
+  const cache=buildCache(data),i=data.length-1;
+  const condFns=combo.conds.map(c=>CONDS[c]);
+  const results=condFns.map((fn,j)=>{try{return{name:CONDS[combo.conds[j]].name,met:fn.fn(data,i,cache)}}catch(e){return{name:CONDS[combo.conds[j]].name,met:false}}});
+  return{met:results.every(r=>r.met),conditions:results,lastDate:data[i].date,lastPrice:data[i].close};
+}
 
-def fetch_batch(tickers, period="6mo"):
-    symbols = " ".join([t + ".T" for t in tickers])
-    try:
-        df = yf.download(symbols, period=period, auto_adjust=True, threads=True, progress=False)
-        if df.empty:
-            return []
-    except Exception:
-        return []
+function calcScore(s){if(s.n<3)return-999;return Math.min(s.pf,5)*18+s.wr*55+Math.max(Math.min(s.avgRet*500,40),-40)-s.l*2-(s.n<5?20:0)}
 
-    results = []
-    for tk in tickers:
-        sym = tk + ".T"
-        try:
-            if len(tickers) == 1:
-                sub = df
-            else:
-                sub = df.xs(sym, axis=1, level=1) if hasattr(df.columns, 'levels') else df
+const fN=n=>n!=null?n.toLocaleString("ja-JP"):"-";
+const fP=n=>n!=null?(n*100).toFixed(1)+"%":"-";
+const fY=n=>n!=null?"¥"+n.toLocaleString("ja-JP"):"-";
+const LC={"仕手疑い":"#ff1744","ファンダ":"#ff9100","ダマシ":"#ffd740","トレンド逆行":"#b388ff"};
 
-            records = []
-            for idx, row in sub.iterrows():
-                try:
-                    c = float(row["Close"])
-                    if c != c:
-                        continue
-                    records.append({
-                        "date": idx.strftime("%Y-%m-%d"),
-                        "open": round(float(row["Open"])),
-                        "high": round(float(row["High"])),
-                        "low": round(float(row["Low"])),
-                        "close": round(c),
-                        "volume": int(float(row["Volume"])) if row["Volume"] == row["Volume"] else 0,
-                    })
-                except Exception:
-                    continue
+function Grade({sc,pf,wr}){
+  let g,co;
+  if(sc>=75&&pf>=1.8&&wr>=0.55){g="S";co="#00e5ff"}
+  else if(sc>=50&&pf>=1.3){g="A";co="#00e676"}
+  else if(sc>=25&&pf>=1.0){g="B";co="#ffd740"}
+  else if(sc>=5){g="C";co="#ff9100"}
+  else{g="D";co="#ff1744"}
+  return <span className="m" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:6,fontSize:14,fontWeight:800,color:co,background:co+"15",border:"1px solid "+co+"30"}}>{g}</span>;
+}
 
-            if len(records) > 30:
-                results.append({
-                    "ticker": tk,
-                    "name": TICKER_NAMES.get(tk, tk),
-                    "data": records,
-                })
-        except Exception:
-            continue
+function PnlBar({trades}){
+  if(!trades.length)return null;
+  const mx=Math.max(...trades.map(t=>Math.abs(t.pnl)),1);
+  return <div style={{display:"flex",gap:2,alignItems:"end",height:50,marginTop:8}}>
+    {trades.slice(-30).map((t,i)=><div key={i} style={{flex:1,minWidth:3,background:t.pnl>=0?"#00e676":"#ff1744",opacity:0.7,borderRadius:1,height:Math.max(2,Math.abs(t.pnl)/mx*50)+"px",alignSelf:t.pnl>=0?"flex-end":"flex-end"}}/>)}
+  </div>;
+}
 
-    return results
+function App(){
+  const[stocks,setStocks]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[src,setSrc]=useState("loading");
+  const[view,setView]=useState("today");
+  const[cfg]=useState({capital:1000000,slip:5,stopLoss:0.05});
+  const[detail,setDetail]=useState(null);
+  const[minWr,setMinWr]=useState(0);
 
+  useEffect(()=>{
+    async function load(){
+      try{
+        var res=await fetch("/api/stocks?batch=0&period=6mo");
+        if(!res.ok)throw new Error("API error");
+        var j=await res.json();
+        if(!j.stocks||j.stocks.length===0)throw new Error("no data");
+        setStocks(j.stocks);setSrc("real");setLoading(false);
+        for(var bi=1;bi<=2;bi++){
+          try{
+            var r2=await fetch("/api/stocks?batch="+bi+"&period=6mo");
+            var j2=await r2.json();
+            if(j2.stocks)setStocks(function(prev){return prev.concat(j2.stocks)});
+          }catch(e2){}
+        }
+      }catch(err){
+        setStocks(genDemo());setSrc("demo");setLoading(false);
+      }
+    }
+    load();
+  },[]);
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        try:
-            from urllib.parse import urlparse, parse_qs
-            parsed = urlparse(self.path)
-            params = parse_qs(parsed.query)
+  function genDemo(){
+    function R(s){let x=s;return function(){x=(x*16807)%2147483647;return(x-1)/2147483646}}
+    function gen(tk,nm,bp,vol,tr,seed){
+      var r=R(seed),data=[],p=bp,m=0;
+      for(var i=0;i<350;i++){var dt=new Date(2025,0,6);dt.setDate(dt.getDate()+Math.floor(i*1.4));if(dt.getDay()===0||dt.getDay()===6)continue;var r1=r(),r2=r();var n=Math.sqrt(-2*Math.log(Math.max(r1,.0001)))*Math.cos(2*Math.PI*r2);m=m*.92+n*.08;var ret=tr/252+vol*n/Math.sqrt(252)+m*.003;p*=(1+ret);data.push({date:dt.toISOString().slice(0,10),open:Math.round(p*(1+(r()-.5)*.004)),high:Math.round(p*(1+r()*vol*.018)),low:Math.round(p*(1-r()*vol*.018)),close:Math.round(p),volume:Math.floor(400000+r()*1800000)})}
+      return{ticker:tk,name:nm,data:data};
+    }
+    return[gen("7203","トヨタ自動車",2800,.22,.05,3001),gen("6758","ソニーG",13000,.28,.08,3002),gen("9984","ソフトバンクG",6500,.35,-.02,3003),gen("8306","三菱UFJFG",1200,.20,.06,3004),gen("6861","キーエンス",62000,.25,.10,3005),gen("4063","信越化学",5500,.24,.04,3006),gen("6501","日立製作所",9800,.26,.07,3007),gen("7974","任天堂",7200,.30,.03,3008),gen("8035","東京エレクトロン",28000,.32,.12,3009),gen("6723","ルネサス",2600,.34,.06,3010),gen("4519","中外製薬",5200,.26,.09,3011),gen("6594","日本電産",7800,.30,-.03,3012),gen("6367","ダイキン工業",25000,.22,.06,3013),gen("4568","第一三共",4500,.28,.11,3014),gen("7741","HOYA",18000,.24,.08,3015),gen("6981","村田製作所",2800,.27,.05,3016),gen("9433","KDDI",4300,.17,.04,3017),gen("9432","NTT",170,.18,.03,3018),gen("6902","デンソー",2200,.24,.04,3019),gen("3382","セブン&iHD",2000,.20,.01,3020)];
+  }
+  
 
-            tickers_param = params.get("tickers", [None])[0]
-            period = params.get("period", ["6mo"])[0]
-            batch_idx = params.get("batch", [None])[0]
+  const allResults=useMemo(function(){
+    if(!stocks.length)return[];
+    var res=[];
+    for(var ci=0;ci<COMBOS.length;ci++){
+      var combo=COMBOS[ci];
+      for(var si=0;si<stocks.length;si++){
+        var stock=stocks[si];
+        if(!stock.data||stock.data.length<80)continue;
+        try{
+          var result=testCombo(stock,combo,cfg);
+          var sc=calcScore(result.s);
+          var today=checkToday(stock,combo);
+          res.push({combo:combo,stock:stock,result:result,sc:sc,today:today});
+        }catch(e){}
+      }
+    }
+    return res.sort(function(a,b){return b.sc-a.sc});
+  },[stocks,cfg]);
 
-            if tickers_param:
-                tickers = [t.strip() for t in tickers_param.split(",")]
-            elif batch_idx is not None:
-                idx = int(batch_idx)
-                batch_size = 50
-                start = idx * batch_size
-                tickers = ALL_TICKERS[start:start + batch_size]
-            else:
-                tickers = ALL_TICKERS[:50]
+  const todaySignals=useMemo(function(){
+    return allResults.filter(function(r){return r.today.met&&r.result.s.n>=3&&r.result.s.pf>=1.0}).sort(function(a,b){return b.sc-a.sc});
+  },[allResults]);
 
-            results = fetch_batch(tickers, period)
+  const filtered=useMemo(function(){
+    return allResults.filter(function(r){return r.result.s.n>=3&&r.result.s.wr>=minWr/100});
+  },[allResults,minWr]);
 
-            response = {
-                "stocks": results,
-                "count": len(results),
-                "total_available": len(ALL_TICKERS),
-                "period": period,
-                "timestamp": datetime.now().isoformat(),
-                "tickerNames": TICKER_NAMES,
-            }
+  if(loading)return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",gap:16}}>
+      <div className="ld m" style={{fontSize:13,color:"#00e5ff"}}>株価データを取得中...</div>
+    </div>
+  );
 
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-            self.send_header("Cache-Control", "s-maxage=3600, stale-while-revalidate=86400")
-            self.end_headers()
-            self.wfile.write(json.dumps(response, ensure_ascii=False).encode("utf-8"))
+  return(
+    <div style={{maxWidth:960,margin:"0 auto",paddingBottom:50}}>
+      <div style={{background:"linear-gradient(170deg,#060a10,#0d1a28)",borderBottom:"1px solid #182030",padding:16}}>
+        <div className="f ic g6" style={{marginBottom:5}}>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"#00e5ff",boxShadow:"0 0 12px #00e5ff"}}/>
+          <span className="m" style={{fontSize:9,color:"#00e5ff",letterSpacing:3,textTransform:"uppercase"}}>Swing Trade Lab</span>
+          <span className="m" style={{marginLeft:"auto",fontSize:9,padding:"2px 8px",borderRadius:4,background:src==="real"?"#00e67615":"#ffd74015",color:src==="real"?"#00e676":"#ffd740",border:"1px solid "+(src==="real"?"#00e67633":"#ffd74033")}}>{src==="real"?"実データ接続中":"デモデータ"}</span>
+        </div>
+        <h1 style={{fontSize:18,fontWeight:700}}>スイングトレード・スクリーナー</h1>
+        <p style={{fontSize:11,color:"#8094a8",marginTop:3}}>{stocks.length}銘柄 × {COMBOS.length}コンボ = {stocks.length*COMBOS.length}パターン自動検証</p>
+      </div>
 
-        except Exception as e:
-            self.send_response(500)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e), "trace": traceback.format_exc()}).encode("utf-8"))
+      <div style={{padding:14}}>
+        <div className="f w g4" style={{marginBottom:14}}>
+          {[["today","今日の推奨"],["screening","スクリーニング"],["combos","コンボ分析"],["losslab","敗因ラボ"]].map(function(t){
+            return <button key={t[0]} onClick={function(){setView(t[0]);setDetail(null)}} className={"b"+(view===t[0]?" a":"")}>
+              {t[1]}{t[0]==="today"&&todaySignals.length>0&&<span style={{marginLeft:4,background:"#ff1744",color:"#fff",borderRadius:8,padding:"1px 5px",fontSize:9}}>{todaySignals.length}</span>}
+            </button>;
+          })}
+        </div>
 
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
+        {view==="today"&&(
+          <div>
+            <div className="c" style={{background:"linear-gradient(135deg,#00e5ff08,#00e67608)",borderColor:"#00e5ff33",padding:16}}>
+              <div className="m" style={{fontSize:10,color:"#00e5ff",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>{src==="real"?"本日のシグナル":"シミュレーション結果"}</div>
+              <div style={{fontSize:12,color:"#8094a8",lineHeight:1.7}}>以下は<strong style={{color:"#e4eaf2"}}>最新データ</strong>で買い条件が成立した銘柄です。勝率は過去の同条件での実績。{src!=="real"&&<span style={{color:"#ffd740"}}> ※デモデータ</span>}</div>
+            </div>
+            {todaySignals.length===0?(
+              <div className="c" style={{textAlign:"center",color:"#4a5e70",padding:40}}>現在、全条件成立の銘柄はありません。<br/><span style={{fontSize:11}}>「スクリーニング」タブで部分一致を確認できます。</span></div>
+            ):todaySignals.map(function(r,i){
+              var s=r.result.s;
+              return <div key={i} className={"c"+(i<3?" ch":"")} onClick={function(){setDetail(r);setView("screening")}} style={{cursor:"pointer"}}>
+                <div className="f ic g8 w">
+                  <Grade sc={r.sc} pf={s.pf} wr={s.wr}/>
+                  <div style={{flex:"1 1 180px",minWidth:150}}>
+                    <div style={{fontSize:14,fontWeight:700}}><span className="ac m">{r.stock.ticker}</span><span style={{marginLeft:6}}>{r.stock.name}</span><span className="m d" style={{marginLeft:8,fontSize:11}}>¥{fN(r.today.lastPrice)}</span></div>
+                    <div style={{fontSize:10,color:"#8094a8",marginTop:2}}>{r.combo.name}</div>
+                    <div className="f g4 w" style={{marginTop:4}}>
+                      {(r.today.conditions||[]).map(function(c,j){return <span key={j} className="m" style={{padding:"2px 6px",borderRadius:4,fontSize:8,background:c.met?"#00e67615":"#ff174415",color:c.met?"#00e676":"#ff1744",border:"1px solid "+(c.met?"#00e67633":"#ff174433")}}>{c.met?"✓":"✗"} {c.name}</span>})}
+                    </div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div className="m" style={{fontSize:9,color:"#4a5e70"}}>過去勝率</div>
+                    <div className="m" style={{fontSize:28,fontWeight:800,color:s.wr>=0.6?"#00e676":s.wr>=0.5?"#ffd740":"#ff9100"}}>{(s.wr*100).toFixed(0)}%</div>
+                    <div className="m" style={{fontSize:9,color:"#8094a8"}}>{s.n}回中{s.w}勝</div>
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>
+        )}
+
+        {view==="screening"&&!detail&&(
+          <div>
+            <div className="f w g6" style={{marginBottom:10}}>
+              <div><div className="lb">最低勝率</div><select value={minWr} onChange={function(ev){setMinWr(+ev.target.value)}} className="s">{[0,40,50,60].map(function(v){return <option key={v} value={v}>{v}%以上</option>})}</select></div>
+              <div className="m" style={{marginLeft:"auto",fontSize:10,color:"#4a5e70",alignSelf:"flex-end"}}>{filtered.length}件</div>
+            </div>
+            {filtered.slice(0,40).map(function(r,i){
+              var s=r.result.s;
+              return <div key={i} className={"c"+(i<3?" ch":"")} onClick={function(){setDetail(r)}} style={{cursor:"pointer",padding:"12px 14px"}}>
+                <div className="f ic g8 w">
+                  <span className="m" style={{fontSize:11,color:i<3?"#00e5ff":"#4a5e70",width:24,textAlign:"right"}}>#{i+1}</span>
+                  <Grade sc={r.sc} pf={s.pf} wr={s.wr}/>
+                  <div style={{flex:"1 1 180px",minWidth:140}}>
+                    <div style={{fontSize:13,fontWeight:600}}><span className="ac m">{r.stock.ticker}</span> {r.stock.name}</div>
+                    <div style={{fontSize:10,color:"#8094a8"}}>{r.combo.name}</div>
+                  </div>
+                  <div className="f w m" style={{fontSize:11,gap:14}}>
+                    <div style={{textAlign:"center"}}><div className="mu" style={{fontSize:9}}>勝率</div><div style={{fontSize:15,fontWeight:700,color:s.wr>=0.6?"#00e676":s.wr>=0.5?"#ffd740":"#ff1744"}}>{fP(s.wr)}</div></div>
+                    <div style={{textAlign:"center"}}><div className="mu" style={{fontSize:9}}>PF</div><div style={{fontWeight:600,color:s.pf>=1.5?"#00e676":"#ffd740"}}>{s.pf>=99?"∞":s.pf.toFixed(2)}</div></div>
+                    <div style={{textAlign:"center"}}><div className="mu" style={{fontSize:9}}>損益</div><div style={{fontWeight:600,color:s.avgRet>=0?"#00e676":"#ff1744"}}>{(s.avgRet*100).toFixed(2)}%</div></div>
+                    {r.today.met&&<span style={{background:"#00e5ff22",color:"#00e5ff",padding:"2px 6px",borderRadius:4,fontSize:9,alignSelf:"center"}}>本日成立</span>}
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>
+        )}
+
+        {view==="screening"&&detail&&(function(){
+          var s=detail.result.s,t=detail.result.trades;
+          var lrData=Object.keys(s.lossR).map(function(k){return{name:k,value:s.lossR[k],fill:LC[k]||"#4a5e70"}});
+          return <div>
+            <button onClick={function(){setDetail(null)}} className="b" style={{borderColor:"#00e5ff",color:"#00e5ff",marginBottom:12}}>← 戻る</button>
+            <div className="c ch" style={{padding:16}}>
+              <div className="f ic g8" style={{marginBottom:10}}><Grade sc={detail.sc} pf={s.pf} wr={s.wr}/><div><div style={{fontSize:16,fontWeight:700}}><span className="ac m">{detail.stock.ticker}</span> {detail.stock.name}</div><div style={{fontSize:11,color:"#8094a8"}}>{detail.combo.name}</div></div></div>
+              <div className="f g4 w">{detail.combo.conds.map(function(c){return <span key={c} className="m" style={{background:"#00e5ff15",border:"1px solid #00e5ff33",padding:"2px 8px",borderRadius:4,fontSize:9,color:"#00e5ff"}}>{CONDS[c]&&CONDS[c].name}</span>})}</div>
+            </div>
+            <div className="c" style={{background:"linear-gradient(135deg,#00e5ff06,transparent)",borderColor:"#00e5ff33",padding:20}}>
+              <div className="m" style={{fontSize:10,color:"#00e5ff",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>勝利確率</div>
+              <div className="f ic g8"><span className="m" style={{fontSize:48,fontWeight:800,color:s.wr>=0.6?"#00e676":s.wr>=0.5?"#ffd740":"#ff1744"}}>{(s.wr*100).toFixed(1)}</span><span style={{fontSize:20,color:"#8094a8"}}>%</span><span className="m" style={{fontSize:12,color:"#8094a8",marginLeft:8}}>({s.n}回中{s.w}勝)</span></div>
+              <div style={{fontSize:12,color:"#8094a8",lineHeight:1.7,marginTop:6}}>勝ち平均: <span className="g">+{(s.avgWR*100).toFixed(2)}%</span> / 負け平均: <span className="r">{(s.avgLR*100).toFixed(2)}%</span></div>
+              {detail.today.met&&<div style={{marginTop:8,padding:"8px 12px",background:"#00e67615",borderRadius:6,border:"1px solid #00e67633",fontSize:12,color:"#00e676"}}>⚡ この条件は最新データで成立中</div>}
+            </div>
+            <div className="f w g8" style={{marginBottom:12}}>{[{l:"PF",v:s.pf>=99?"∞":s.pf.toFixed(2),co:s.pf>=1.5?"#00e676":"#ffd740"},{l:"総損益",v:fY(s.pnl),co:s.pnl>=0?"#00e676":"#ff1744"},{l:"保有",v:detail.combo.hold+"日",co:"#e4eaf2"}].map(function(x,i){return <div key={i} className="c" style={{flex:"1 1 90px",marginBottom:0}}><div className="lb">{x.l}</div><div className="m" style={{fontSize:18,fontWeight:700,color:x.co}}>{x.v}</div></div>})}</div>
+            {lrData.length>0&&<div className="c"><div className="lb" style={{color:"#ff1744",marginBottom:8}}>敗因分析</div>{lrData.map(function(d,i){return <div key={i} className="f ic g8" style={{marginBottom:4}}><div style={{width:10,height:10,borderRadius:2,background:d.fill}}/><span style={{flex:1,fontSize:12}}>{d.name}</span><span className="m" style={{color:d.fill,fontWeight:600}}>{d.value}回</span></div>})}</div>}
+            <div className="c"><div className="lb" style={{marginBottom:4}}>取引損益</div><PnlBar trades={t}/></div>
+            <div className="c"><div className="lb" style={{marginBottom:6}}>取引履歴</div><div style={{overflowX:"auto"}}><table className="m" style={{width:"100%",borderCollapse:"collapse",fontSize:10}}><thead><tr style={{borderBottom:"1px solid #182030"}}>{["買日","売日","損益","敗因"].map(function(h){return <th key={h} style={{padding:"5px 4px",color:"#4a5e70",fontWeight:500,textAlign:"left",fontSize:9}}>{h}</th>})}</tr></thead><tbody>{t.slice(-15).reverse().map(function(x,i){return <tr key={i} style={{borderBottom:"1px solid #18203018"}}><td style={{padding:"4px",color:"#8094a8"}}>{x.nd&&x.nd.slice(5)}</td><td style={{padding:"4px",color:"#8094a8"}}>{x.ed&&x.ed.slice(5)}</td><td style={{padding:"4px",color:x.pnl>0?"#00e676":"#ff1744",fontWeight:600}}>{fY(x.pnl)}</td><td style={{padding:"4px",color:LC[x.lr]||"#8094a8",fontSize:9}}>{x.lr||"—"}</td></tr>})}</tbody></table></div></div>
+          </div>;
+        })()}
+
+        {view==="combos"&&(function(){
+          var sums=COMBOS.map(function(combo){
+            var results=allResults.filter(function(r){return r.combo.id===combo.id&&r.result.s.n>=3});
+            if(!results.length)return{combo:combo,avgWr:0,avgPf:0,total:0,winners:0};
+            return{combo:combo,avgWr:results.reduce(function(s,r){return s+r.result.s.wr},0)/results.length,avgPf:results.reduce(function(s,r){return s+Math.min(r.result.s.pf,10)},0)/results.length,total:results.length,winners:results.filter(function(r){return r.result.s.pf>=1.3&&r.result.s.wr>=0.5}).length};
+          }).sort(function(a,b){return b.avgPf-a.avgPf});
+          return <div>{sums.map(function(cs,i){return <div key={i} className="c" style={{borderColor:cs.avgPf>=1.5?"#00e67633":"#182030"}}>
+            <div className="f ic g8 w" style={{marginBottom:8}}><span className="m" style={{fontSize:11,color:"#4a5e70"}}>#{i+1}</span><span style={{fontSize:13,fontWeight:700,flex:1}}>{cs.combo.name}</span></div>
+            <div className="f g4 w" style={{marginBottom:8}}>{cs.combo.conds.map(function(c){return <span key={c} className="m" style={{background:"#182030",padding:"1px 5px",borderRadius:3,fontSize:8,color:"#8094a8"}}>{CONDS[c]&&CONDS[c].name}</span>})}</div>
+            <div className="f w m" style={{fontSize:11,gap:14}}>
+              <span><span className="mu" style={{fontSize:9}}>平均勝率 </span><span style={{color:cs.avgWr>=0.5?"#00e676":"#ffd740",fontWeight:600}}>{fP(cs.avgWr)}</span></span>
+              <span><span className="mu" style={{fontSize:9}}>平均PF </span><span style={{color:cs.avgPf>=1.5?"#00e676":"#ffd740",fontWeight:600}}>{cs.avgPf?cs.avgPf.toFixed(2):"0"}</span></span>
+              <span><span className="mu" style={{fontSize:9}}>勝てる銘柄 </span><span className="g" style={{fontWeight:600}}>{cs.winners}/{cs.total}</span></span>
+            </div>
+          </div>})}</div>;
+        })()}
+
+        {view==="losslab"&&(function(){
+          var all=[];allResults.forEach(function(r){r.result.trades.filter(function(t){return t.pnl<0}).forEach(function(t){all.push({pnl:t.pnl,lr:t.lr,stock:r.stock.name,tk:r.stock.ticker,combo:r.combo.name})})});
+          var by={};all.forEach(function(l){var k=l.lr||"不明";if(!by[k])by[k]={c:0,loss:0};by[k].c++;by[k].loss+=l.pnl});
+          var rd=Object.keys(by).map(function(k){return{name:k,count:by[k].c,loss:by[k].loss,avg:by[k].loss/by[k].c,fill:LC[k]||"#4a5e70"}}).sort(function(a,b){return a.loss-b.loss});
+          return <div>
+            <div className="c" style={{background:"#ff174408",borderColor:"#ff174422",padding:14}}><div className="m" style={{fontSize:10,color:"#ff1744",letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>敗因研究ラボ</div><div style={{fontSize:11,color:"#8094a8"}}>全{all.length}件の負けを分類。最大損失カテゴリの改善が鍵。</div></div>
+            {rd.map(function(d,i){return <div key={i} className="c" style={{borderColor:d.fill+"33"}}>
+              <div className="f ic g8" style={{marginBottom:8}}><div style={{width:12,height:12,borderRadius:3,background:d.fill}}/><span style={{fontSize:14,fontWeight:700,color:d.fill}}>{d.name}</span></div>
+              <div className="f m" style={{fontSize:11,gap:14,marginBottom:6}}><span>{d.count}回</span><span style={{color:"#ff1744"}}>総損失: {fY(d.loss)}</span><span style={{color:"#ff1744"}}>平均: {fY(Math.round(d.avg))}</span></div>
+              <div style={{fontSize:10,color:"#8094a8",lineHeight:1.7}}>
+                {d.name==="仕手疑い"&&"対策: 出来高3倍超の異常銘柄をフィルタで除外。小型株は特に注意。"}
+                {d.name==="ファンダ"&&"対策: 決算発表日の前後5営業日はエントリーを自動スキップ。"}
+                {d.name==="ダマシ"&&"対策: 翌日も陽線継続なら確定する確認足ルールを追加。"}
+                {d.name==="トレンド逆行"&&"対策: 日経平均が25日線を下回る期間はエントリーをスキップ。"}
+              </div>
+            </div>})}
+          </div>;
+        })()}
+
+        <div style={{textAlign:"center",padding:"20px 0",fontSize:9,color:"#4a5e70",lineHeight:1.7}}>
+          {src==="real"?"実データを使用中。":"デモデータで動作中。"}<br/>過去の成績は将来を保証しません。投資は自己責任で。<br/><span style={{color:"#00e5ff"}}>Swing Trade Lab</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("app")).render(<App/>);
+</script>
+</body>
+</html>
+
+  
